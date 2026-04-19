@@ -1,0 +1,14 @@
+README.md
+ai_integration.py
+config_manager.py
+git_handler.py
+github_api.py
+logger.py
+main.py
+setup.py
+gitfold.egg-info/PKG-INFO
+gitfold.egg-info/SOURCES.txt
+gitfold.egg-info/dependency_links.txt
+gitfold.egg-info/entry_points.txt
+gitfold.egg-info/requires.txt
+gitfold.egg-info/top_level.txt
