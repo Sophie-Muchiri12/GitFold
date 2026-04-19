@@ -43,6 +43,7 @@ from logger import (
     print_summary,
     manual_mode_notice,
     confirm_step,
+    prompt_switch_to_manual,
 )
 
 
@@ -54,11 +55,26 @@ from logger import (
 def done(manual, no_push, no_pr, branch):
     """
     Gitfold — one command to stage, commit, merge, push, and open a PR.
+
+    Aliases: gitfold, gf
     """
 
     header()
 
-    results = {
+    # Handle Ctrl+C gracefully anywhere in the flow
+    try:
+        _run(manual, no_push, no_pr, branch)
+    except KeyboardInterrupt:
+        if prompt_switch_to_manual():
+            print()
+            _run(manual=True, no_push=no_push, no_pr=no_pr, branch=branch)
+        else:
+            print(f"\nGitfold exited. Your staged changes are safe.\n")
+            sys.exit(0)
+
+
+def _run(manual, no_push, no_pr, branch):
+    state = {
         "staged": False,
         "committed": False,
         "pulled": False,
