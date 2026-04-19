@@ -1,0 +1,10 @@
+gitpython #for interacting with Git repos
+
+openai #for AI commit message generation
+
+requests #for GitHub API calls
+
+python-dotenv #for managing your API keys securely in the .env file
+
+click
+rich
