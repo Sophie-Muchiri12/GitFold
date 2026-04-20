@@ -4,7 +4,26 @@ from dotenv import load_dotenv
 
 load_dotenv()
 
-client = openai.OpenAI(api_key=os.getenv("OPENAI_API_KEY"))
+# Supports both Groq and OpenAI — just set the right key in your .env
+# For Groq:   GROQ_API_KEY=your_key_here
+# For OpenAI: OPENAI_API_KEY=your_key_here
+
+GROQ_API_KEY = os.getenv("GROQ_API_KEY")
+OPENAI_API_KEY = os.getenv("OPENAI_API_KEY")
+
+if GROQ_API_KEY:
+    client = openai.OpenAI(
+        api_key=GROQ_API_KEY,
+        base_url="https://api.groq.com/openai/v1",
+    )
+    MODEL = "llama-3.1-8b-instant"
+elif OPENAI_API_KEY:
+    client = openai.OpenAI(api_key=OPENAI_API_KEY)
+    MODEL = "gpt-4o"
+else:
+    raise Exception(
+        "No AI API key found. Please set GROQ_API_KEY or OPENAI_API_KEY in your .env file."
+    )
 
 
 def generate_commit_message(diff: str) -> str:
@@ -34,7 +53,7 @@ Git diff:
     full_message = ""
 
     stream = client.chat.completions.create(
-        model="gpt-4o",
+        model=MODEL,
         messages=[{"role": "user", "content": prompt}],
         stream=True,
         max_tokens=300,
@@ -50,10 +69,11 @@ Git diff:
     return full_message.strip()
 
 
-def generate_pr_description(diff: str, commit_message: str, branch_name: str) -> str:
+def generate_pr_description(diff: str, commit_message: str, branch_name: str):
     """
     Generate a pull request title and description based on the diff and commit message.
     Streams the response in real time.
+    Returns a tuple of (pr_title, pr_body).
     """
     if not diff or diff.strip() == "":
         return "Minor updates", "No significant changes detected."
@@ -80,7 +100,7 @@ Git diff:
     full_response = ""
 
     stream = client.chat.completions.create(
-        model="gpt-4o",
+        model=MODEL,
         messages=[{"role": "user", "content": prompt}],
         stream=True,
         max_tokens=500,
@@ -105,7 +125,7 @@ def confirm_message(message: str, label: str = "commit message") -> str:
     """
     Show the generated message to the developer and ask for confirmation.
     They can accept it, edit it, or regenerate.
-    Returns the final approved message.
+    Returns the final approved message or None to signal regeneration.
     """
     print(f"\n--- Generated {label} ---")
     print(message)

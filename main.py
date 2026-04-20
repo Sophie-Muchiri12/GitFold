@@ -74,7 +74,7 @@ def done(manual, no_push, no_pr, branch):
 
 
 def _run(manual, no_push, no_pr, branch):
-    state = {
+    results = {
         "staged": False,
         "committed": False,
         "pulled": False,
