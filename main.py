@@ -225,7 +225,18 @@ def _run(manual, no_push, no_pr, branch):
                     pr_title, pr_body = generate_pr_description(
                         diff, commit_message, branch_info["current"]
                     )
+
+                    # Keep regenerating until user accepts
+                    while not pr_title:
+                        pr_title, pr_body = generate_pr_description(
+                            diff, commit_message, branch_info["current"]
+                        )
                     pr_title = confirm_message(pr_title, "PR title")
+                    while not pr_title:
+                        pr_title, pr_body = generate_pr_description(
+                            diff, commit_message, branch_info["current"]
+                        )
+                        pr_title = confirm_message(pr_title, "PR title")
 
                     step("Creating pull request on GitHub...")
                     pr_data = create_pull_request(

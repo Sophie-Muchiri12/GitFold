@@ -127,9 +127,7 @@ def confirm_message(message: str, label: str = "commit message") -> str:
     They can accept it, edit it, or regenerate.
     Returns the final approved message or None to signal regeneration.
     """
-    print(f"\n--- Generated {label} ---")
-    print(message)
-    print("---")
+    print(f"\n--- Accept the {label} above? ---")
 
     while True:
         choice = input(f"\nAccept this {label}? [y]es / [e]dit / [r]egenerate: ").strip().lower()
