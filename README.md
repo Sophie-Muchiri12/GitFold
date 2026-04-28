@@ -89,15 +89,7 @@ Gitfold will:
 
 ---
 
-### Manual mode
 
-```bash
-done --manual
-```
-
-Gitfold will ask for your confirmation before each step.
-
----
 
 
 ---
