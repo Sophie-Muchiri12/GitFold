@@ -1,0 +1,154 @@
+# Gitfold
+
+> One command to stage, commit, merge, push, and open a PR — powered by AI.
+
+Gitfold automates your entire Git workflow with a single terminal command. It stages your files, uses AI to write a meaningful commit message based on your actual code changes, syncs with your development branch, pushes to GitHub, and creates a pull request — all in one go.
+
+---
+
+## Features
+
+- **One command** — just type `done` and Gitfold handles the rest
+- **AI-powered commit messages** — understands your diff and writes proper conventional commits
+- **AI-powered PR descriptions** — generates a clear summary and bullet-point changelog
+- **Intelligent branch detection** — auto-detects your main, dev, and current branches
+- **Real-time terminal output** — watch every step happen live
+- **Manual mode** — use `done --manual` to confirm each step yourself
+- **GitHub PR creation** — opens the PR in your browser automatically
+- **Cross-platform** — works on macOS, Linux, and Windows
+
+---
+
+## Installation
+
+### 1. Clone the repo
+
+```bash
+git clone https://github.com/yourusername/gitfold.git
+cd gitfold
+```
+
+### 2. Install dependencies
+
+```bash
+pip install -r requirements.txt
+```
+
+### 3. Install Gitfold as a global command
+
+```bash
+pip install -e .
+```
+
+After this, you can type `done` from any Git repository on your machine.
+
+---
+
+## Setup
+
+Create a `.env` file in your project root with your API keys:
+
+```dotenv
+OPENAI_API_KEY=your_openai_key_here
+GITHUB_TOKEN=your_github_token_here
+```
+
+**Getting your OpenAI API key:** [platform.openai.com/api-keys](https://platform.openai.com/api-keys)
+
+**Getting your GitHub token:**
+1. Go to GitHub → Settings → Developer settings → Personal access tokens → Tokens (classic)
+2. Generate a new token with `repo` and `read:user` scopes
+3. Copy and paste it into your `.env` file
+
+> Never commit your `.env` file. Add it to `.gitignore`.
+
+---
+
+## Usage
+
+### Automatic mode (recommended)
+
+```bash
+done
+```
+
+Gitfold will:
+1. Detect your repo and branches
+2. Stage all changed files
+3. Generate an AI commit message — you can accept, edit, or regenerate it
+4. Commit your changes
+5. Pull and merge from your dev/main branch
+6. Push to remote
+7. Generate an AI PR description and create the PR on GitHub
+8. Open the PR in your browser
+9. Print a summary of everything that happened
+
+---
+
+### Manual mode
+
+```bash
+done --manual
+```
+
+Gitfold will ask for your confirmation before each step.
+
+---
+
+### Additional flags
+
+```bash
+done --no-push       # Commit only, skip push and PR
+done --no-pr         # Push but skip PR creation
+done --branch main   # Override the target base branch
+```
+
+---
+
+## First run
+
+On your first run, Gitfold will ask you a few setup questions:
+
+```
+⚙️  Welcome to Gitfold! Let's set up your config.
+
+What is your default branch? (detected: 'main', press Enter to confirm):
+Development branch detected as 'dev'. Use this? [y/n]:
+Auto-push to remote after commit? [y/n] (default: y):
+Auto-open PR in browser after push? [y/n] (default: y):
+Your GitHub username (optional, press Enter to skip):
+```
+
+Your answers are saved to `.gitfold.json` in your project root. You can edit this file anytime.
+
+---
+
+## Project structure
+
+```
+gitfold/
+├
+│   ├── main.py            # Entry point and command flow
+│   ├── git_handler.py     # All Git operations
+│   ├── ai_integration.py  # LLM commit and PR generation
+│   ├── config_manager.py  # Config loading and setup
+│   ├── github_api.py      # GitHub API and PR creation
+│   └── logger.py          # Terminal output and display
+├── .env                   # Your API keys (never commit this)
+├── .gitignore
+├── requirements.txt
+├── setup.py
+└── README.md
+```
+
+---
+
+## Contributing
+
+Gitfold is open source and contributions are welcome! Feel free to open issues, suggest features, or submit pull requests.
+
+---
+
+## License
+
+MIT License. See [LICENSE](LICENSE) for details.
