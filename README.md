@@ -66,10 +66,14 @@ GITHUB_TOKEN=your_github_token_here
 
 ## Usage
 
-### Automatic mode (recommended)
+### How to use Gitfold:
 
 ```bash
-done
+  
+  › Run gitfold          — fully automated mode
+  › Run gitfold --manual  — confirm each step yourself
+  › Run gitfold --no-push — commit only, skip push & PR
+  › Run gitfold --no-pr   — push but skip PR creation
 ```
 
 Gitfold will:
@@ -95,13 +99,6 @@ Gitfold will ask for your confirmation before each step.
 
 ---
 
-### Additional flags
-
-```bash
-done --no-push       # Commit only, skip push and PR
-done --no-pr         # Push but skip PR creation
-done --branch main   # Override the target base branch
-```
 
 ---
 
