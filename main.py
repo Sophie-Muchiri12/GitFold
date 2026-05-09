@@ -37,6 +37,7 @@ from logger import (
     success,
     warning,
     error,
+    info,
     section,
     divider,
     print_changed_files,
@@ -81,6 +82,7 @@ def _run(manual, no_push, no_pr, branch):
         "merged": False,
         "pushed": False,
         "pr_created": False,
+        "pr_exists": False,
         "pr_url": None,
         "errors": [],
     }
@@ -246,9 +248,17 @@ def _run(manual, no_push, no_pr, branch):
                         pr_title=pr_title,
                         pr_body=pr_body,
                     )
-                    results["pr_created"] = True
+                    if pr_data.get("_is_new"):
+                        results["pr_created"] = True
+                        success(f"PR created and opening in browser...")
+                    else:
+                        results["pr_exists"] = True
+                        warning("A pull request already exists for this branch.")
+                        info("GitHub only allows one open PR per branch at a time.")
+                        info("The good news — your new commits have been automatically")
+                        info("added to the existing PR. You don't need a new one.")
+                        info("Opening your existing PR so you can review it...")
                     results["pr_url"] = pr_data["html_url"]
-                    success(f"PR created: {pr_data['html_url']}")
                     open_pr_in_browser(pr_data["html_url"])
 
                 except Exception as e:

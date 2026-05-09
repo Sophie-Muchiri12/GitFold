@@ -70,6 +70,7 @@ def create_pull_request(
 
     if response.status_code == 201:
         pr_data = response.json()
+        pr_data["_is_new"] = True
         print(f"✔ Pull request created: {pr_data['html_url']}")
         return pr_data
 
@@ -80,9 +81,9 @@ def create_pull_request(
         # PR already exists — fetch it and return it instead of erroring
         for err in errors:
             if "already exists" in str(err.get("message", "")).lower():
-                print(f"✔ A PR already exists for this branch — fetching it...")
                 existing_pr = get_existing_pr(owner, repo, head_branch, base_branch)
                 if existing_pr:
+                    existing_pr["_is_new"] = False
                     return existing_pr
 
         raise Exception(f"GitHub API error 422: {error_data}")

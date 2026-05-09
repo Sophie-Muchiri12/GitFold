@@ -172,10 +172,14 @@ def print_summary(results: dict):
         ("merged",     "Merged dev into branch"),
         ("pushed",     "Pushed to remote"),
         ("pr_created", "Pull request created"),
+        ("pr_exists",  "Existing PR found and opened"),
     ]
 
     for key, label in steps:
         value = results.get(key)
+        # Don't show pr_created as failed if an existing PR was found
+        if key == "pr_created" and results.get("pr_exists"):
+            continue
         time.sleep(0.1)
         if value is True:
             _stream(f"  {CHECKMARK} {label}", delay=0.018, color=GREEN)
