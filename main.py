@@ -37,6 +37,7 @@ from logger import (
     success,
     warning,
     error,
+    info,
     section,
     divider,
     print_changed_files,
