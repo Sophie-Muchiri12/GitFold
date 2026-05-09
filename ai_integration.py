@@ -57,7 +57,7 @@ Git diff:
         messages=[{"role": "user", "content": prompt}],
         stream=True,
         max_tokens=300,
-        temperature=0.4,
+        temperature=0.7,
     )
 
     for chunk in stream:
@@ -104,7 +104,7 @@ Git diff:
         messages=[{"role": "user", "content": prompt}],
         stream=True,
         max_tokens=500,
-        temperature=0.4,
+        temperature=0.7,
     )
 
     for chunk in stream:

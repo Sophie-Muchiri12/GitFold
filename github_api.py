@@ -74,15 +74,18 @@ def create_pull_request(
         return pr_data
 
     elif response.status_code == 422:
-        # PR already exists or no commits between branches
-        error_msg = response.json().get("message", "")
-        if "already exists" in error_msg.lower() or "no commits" in error_msg.lower():
-            print(f"⚠️  PR already exists or no new commits to compare.")
-            # Try to fetch existing PR URL
-            existing_pr = get_existing_pr(owner, repo, head_branch, base_branch)
-            if existing_pr:
-                return existing_pr
-        raise Exception(f"GitHub API error 422: {response.json()}")
+        error_data = response.json()
+        errors = error_data.get("errors", [])
+
+        # PR already exists — fetch it and return it instead of erroring
+        for err in errors:
+            if "already exists" in str(err.get("message", "")).lower():
+                print(f"✔ A PR already exists for this branch — fetching it...")
+                existing_pr = get_existing_pr(owner, repo, head_branch, base_branch)
+                if existing_pr:
+                    return existing_pr
+
+        raise Exception(f"GitHub API error 422: {error_data}")
 
     else:
         raise Exception(
