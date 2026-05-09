@@ -18,3 +18,35 @@ print(secondLargest(arr))
 
 sorted = arr.sort()
 print(sorted)
+
+
+
+# looking for the third largest
+
+# O(n log n)
+
+def thirdLargest(arr):
+    n = len(arr)
+
+    #set all variables to - inf
+
+    first = float('-inf')
+    second = float('-inf')
+    third = float('-inf')
+
+    if n < 3:
+        return -1
+    
+    for i in range(n):
+
+        if (arr[i] > first):
+            third = second
+            second = first
+            first = arr[i]
+
+       
+
+           
+
+        
+        
