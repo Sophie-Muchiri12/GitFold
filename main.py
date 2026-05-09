@@ -81,6 +81,7 @@ def _run(manual, no_push, no_pr, branch):
         "merged": False,
         "pushed": False,
         "pr_created": False,
+        "pr_exists": False,
         "pr_url": None,
         "errors": [],
     }
@@ -246,9 +247,12 @@ def _run(manual, no_push, no_pr, branch):
                         pr_title=pr_title,
                         pr_body=pr_body,
                     )
-                    results["pr_created"] = True
+                    if pr_data.get("_is_new"):
+                        results["pr_created"] = True
+                    else:
+                        results["pr_exists"] = True
                     results["pr_url"] = pr_data["html_url"]
-                    success(f"PR created: {pr_data['html_url']}")
+                    success(f"PR: {pr_data['html_url']}")
                     open_pr_in_browser(pr_data["html_url"])
 
                 except Exception as e:

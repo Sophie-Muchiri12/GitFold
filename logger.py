@@ -172,6 +172,7 @@ def print_summary(results: dict):
         ("merged",     "Merged dev into branch"),
         ("pushed",     "Pushed to remote"),
         ("pr_created", "Pull request created"),
+        ("pr_exists",  "Existing PR found and opened"),
     ]
 
     for key, label in steps:
