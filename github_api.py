@@ -81,7 +81,9 @@ def create_pull_request(
         # PR already exists — fetch it and return it instead of erroring
         for err in errors:
             if "already exists" in str(err.get("message", "")).lower():
-                print(f"✔ A PR already exists for this branch — fetching it...")
+                print(f"\n✔ A pull request already exists for this branch.")
+                print(f"  Your new commits have been automatically added to it.")
+                print(f"  Fetching your existing PR...\n")
                 existing_pr = get_existing_pr(owner, repo, head_branch, base_branch)
                 if existing_pr:
                     existing_pr["_is_new"] = False
