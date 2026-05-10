@@ -1,4 +1,5 @@
 import os
+import time
 import openai
 from dotenv import load_dotenv
 
@@ -16,7 +17,7 @@ if GROQ_API_KEY:
         api_key=GROQ_API_KEY,
         base_url="https://api.groq.com/openai/v1",
     )
-    MODEL = "llama-3.1-8b-instant"
+    MODEL = "llama-3.3-70b-versatile"
 elif OPENAI_API_KEY:
     client = openai.OpenAI(api_key=OPENAI_API_KEY)
     MODEL = "gpt-4o"
@@ -57,12 +58,13 @@ Git diff:
         messages=[{"role": "user", "content": prompt}],
         stream=True,
         max_tokens=300,
-        temperature=0.7,
+        temperature=0.4,
     )
 
     for chunk in stream:
         token = chunk.choices[0].delta.content or ""
         print(token, end="", flush=True)
+        time.sleep(0.03)
         full_message += token
 
     print("\n")
@@ -84,7 +86,7 @@ Branch: {branch_name}
 Commit message: {commit_message}
 
 Based on the git diff below, write a clear PR description with:
-1. A short PR title (first line)
+1. A short PR title (first line) — plain text only, no markdown, no asterisks, no bold
 2. A blank line
 3. A ## Summary section explaining what was changed and why
 4. A ## Changes section with bullet points of key changes
@@ -104,12 +106,13 @@ Git diff:
         messages=[{"role": "user", "content": prompt}],
         stream=True,
         max_tokens=500,
-        temperature=0.7,
+        temperature=0.4,
     )
 
     for chunk in stream:
         token = chunk.choices[0].delta.content or ""
         print(token, end="", flush=True)
+        time.sleep(0.03)
         full_response += token
 
     print("\n")
@@ -117,6 +120,9 @@ Git diff:
     lines = full_response.strip().split("\n")
     pr_title = lines[0].strip() if lines else commit_message
     pr_body = "\n".join(lines[1:]).strip() if len(lines) > 1 else ""
+
+    # Strip markdown bold/italic formatting from title
+    pr_title = pr_title.replace("**", "").replace("__", "").replace("*", "").replace("`", "").strip()
 
     return pr_title, pr_body
 
