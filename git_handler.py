@@ -310,7 +310,7 @@ def auto_resolve_merge(repo, source_branch):
     """
     Attempt to auto-resolve a merge conflict by accepting incoming changes.
     Uses 'theirs' strategy — incoming branch wins on conflicts.
-    Returns True if merge succeeds, False on merge conflict.
+    Returns list of resolved files.
     """
     try:
         repo.git.merge("--abort")
@@ -320,11 +320,11 @@ def auto_resolve_merge(repo, source_branch):
     try:
         repo.git.merge(source_branch, "--strategy-option=theirs", "--no-edit")
         return True
-    except git.GitCommandError:
-        return False
-    except Exception as e:
+    except git.GitCommandError as e:
+        if "conflict" in str(e).lower() or "CONFLICT" in str(e):
+            return False
         raise Exception(
-            f"Merge failed: {str(e.stderr).strip() if hasattr(e, 'stderr') else str(e)}\n"
+            f"Merge failed: {str(e.stderr).strip()}\n"
             "  Tip: resolve any issues manually and re-run gitfold."
         )
 
