@@ -246,10 +246,22 @@ def pull_from_branch(repo, branch_name):
             )
 
 
+class MergeConflictError(Exception):
+    """
+    Raised when a merge conflict is detected.
+    Carries structured data about what happened, why, and how to fix it.
+    """
+    def __init__(self, source_branch, current_branch, conflicting_files):
+        self.source_branch = source_branch
+        self.current_branch = current_branch
+        self.conflicting_files = conflicting_files
+        super().__init__("Merge conflict detected")
+
+
 def merge_branch(repo, source_branch):
     """
     Merge the source branch into the current branch.
-    Gives clear guidance on conflict resolution.
+    Raises MergeConflictError with structured data for guided recovery.
     """
     try:
         repo.git.merge(source_branch, "--no-edit")
@@ -257,7 +269,7 @@ def merge_branch(repo, source_branch):
         error_msg = str(e).lower()
 
         if "conflict" in error_msg or "CONFLICT" in str(e):
-            # List the conflicting files to help the user
+            # Collect conflicting files
             conflicting = []
             try:
                 conflicting = [
@@ -268,22 +280,53 @@ def merge_branch(repo, source_branch):
             except Exception:
                 pass
 
-            conflict_list = "\n    • ".join(conflicting) if conflicting else "unknown files"
-            raise Exception(
-                f"Merge conflict detected when merging '{source_branch}'.\n"
-                f"  Conflicting files:\n    • {conflict_list}\n"
-                "  Please resolve the conflicts, then run 'git add .' and 'git commit'.\n"
-                "  Once resolved, re-run gitfold to continue."
+            current = repo.active_branch.name
+            raise MergeConflictError(
+                source_branch=source_branch,
+                current_branch=current,
+                conflicting_files=conflicting,
             )
 
         elif "already up to date" in error_msg:
-            return  # Nothing to merge — that's fine
+            return
 
         else:
             raise Exception(
-                f"Merge failed: {str(e.stderr).strip()}\n"
-                "  Tip: resolve any issues manually and re-run gitfold."
+                f"Merge failed unexpectedly.\n"
+                f"  Detail: {str(e.stderr).strip()}\n"
+                "  Tip: run 'git merge --abort' to cancel and restore your branch."
             )
+
+
+def abort_merge(repo):
+    """Abort an in-progress merge and restore the branch to its previous state."""
+    try:
+        repo.git.merge("--abort")
+    except git.GitCommandError:
+        pass
+
+
+def auto_resolve_merge(repo, source_branch):
+    """
+    Attempt to auto-resolve a merge conflict by accepting incoming changes.
+    Uses 'theirs' strategy — incoming branch wins on conflicts.
+    Returns True if merge succeeds, False on merge conflict.
+    """
+    try:
+        repo.git.merge("--abort")
+    except Exception:
+        pass
+
+    try:
+        repo.git.merge(source_branch, "--strategy-option=theirs", "--no-edit")
+        return True
+    except git.GitCommandError:
+        return False
+    except Exception as e:
+        raise Exception(
+            f"Merge failed: {str(e.stderr).strip() if hasattr(e, 'stderr') else str(e)}\n"
+            "  Tip: resolve any issues manually and re-run gitfold."
+        )
 
 
 def push_to_remote(repo, branch_name):

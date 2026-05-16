@@ -9,9 +9,11 @@ from git_handler import (
     detect_branches,
     pull_from_branch,
     merge_branch,
+    abort_merge,
     push_to_remote,
     has_remote,
     get_remote_url,
+    MergeConflictError,
 )
 from ai_integration import (
     generate_commit_message,
@@ -46,6 +48,107 @@ from logger import (
     confirm_step,
     prompt_switch_to_manual,
 )
+
+
+def _stream_manual_conflict_resolution(repo, mce: MergeConflictError):
+    """
+    Walk the user through resolving each conflicting file one by one.
+    Opens each file in their default editor, waits for them to save,
+    then stages everything and commits once all conflicts are resolved.
+    """
+    import subprocess
+    import platform
+    from logger import _stream, YELLOW, GREEN, CYAN, DIM, RESET, BOLD
+
+    _stream("\n  Gitfold will open each conflicting file for you.", delay=0.018, color=DIM)
+    _stream("  Fix the conflict markers, save the file, then come back here.", delay=0.018, color=DIM)
+    _stream("  Remember: remove ALL <<<<<<< ======= >>>>>>> markers before saving.\n", delay=0.018, color=DIM)
+
+    # Detect the user's default editor
+    editor = (
+        os.getenv("GIT_EDITOR")
+        or os.getenv("VISUAL")
+        or os.getenv("EDITOR")
+        or ("code --wait" if platform.system() != "Windows" else "notepad")
+    )
+
+    for i, filepath in enumerate(mce.conflicting_files, 1):
+        print()
+        _stream(f"  [{i}/{len(mce.conflicting_files)}] Opening: {filepath}", delay=0.02, color=f"{YELLOW}{BOLD}")
+        _stream(f"  Editor: {editor}", delay=0.015, color=DIM)
+
+        try:
+            # Open the file in the editor and wait for the user to close it
+            subprocess.call(f'{editor} "{filepath}"', shell=True)
+        except Exception:
+            # If editor fails, just tell them to open it manually
+            _stream(f"  Could not open editor automatically.", delay=0.018, color=DIM)
+            _stream(f"  Please open '{filepath}' manually, fix the conflicts, and save.", delay=0.018, color=DIM)
+
+        input(f"\n{YELLOW}?{RESET} Press Enter when you've saved '{filepath}' and fixed all conflicts: ")
+
+        # Check if conflict markers are still present
+        try:
+            with open(filepath, "r") as f:
+                content = f.read()
+            if "<<<<<<" in content or ">>>>>>>" in content or "=======" in content:
+                _stream(f"  ⚠️  Conflict markers still found in '{filepath}'.", delay=0.018, color=YELLOW)
+                input(f"{YELLOW}?{RESET} Please fix them and press Enter again: ")
+        except Exception:
+            pass
+
+        _stream(f"  ✔ '{filepath}' looks good.", delay=0.018, color=GREEN)
+
+    # Stage all resolved files
+    print()
+    _stream("  All files resolved! Staging changes...", delay=0.018, color=DIM)
+    repo.git.add(A=True)
+
+    # Commit the merge
+    _stream("  Committing resolved merge...", delay=0.018, color=DIM)
+    repo.index.commit(f"merge: resolve conflicts from '{mce.source_branch}' into '{mce.current_branch}'")
+    print()
+
+
+def _stream_conflict_guide(mce: MergeConflictError, base_branch: str):
+    """Print a rich, readable guide when a merge conflict is detected."""
+    from logger import _stream, YELLOW, RED, CYAN, GREEN, BOLD, DIM, RESET
+    import time
+
+    _stream(f"  What happened:", delay=0.02, color=BOLD)
+    _stream(
+        f"  Git tried to merge '{base_branch}' into '{mce.current_branch}' but found",
+        delay=0.018, color=DIM
+    )
+    _stream(
+        f"  changes in both branches that affect the same lines of code.",
+        delay=0.018, color=DIM
+    )
+
+    print()
+    _stream(f"  Why this happens:", delay=0.02, color=BOLD)
+    _stream(
+        f"  Someone else (or you on another branch) edited the same file",
+        delay=0.018, color=DIM
+    )
+    _stream(
+        f"  in the same place. Git doesn't know which version to keep.",
+        delay=0.018, color=DIM
+    )
+
+    if mce.conflicting_files:
+        print()
+        _stream(f"  Conflicting files:", delay=0.02, color=BOLD)
+        for f in mce.conflicting_files:
+            time.sleep(0.07)
+            _stream(f"    • {f}", delay=0.015, color=RED)
+
+    print()
+    _stream(f"  If you fix it manually, look for these markers in the files:", delay=0.018, color=BOLD)
+    _stream(f"    <<<<<<< HEAD          ← your changes", delay=0.015, color=YELLOW)
+    _stream(f"    =======               ← divider", delay=0.015, color=YELLOW)
+    _stream(f"    >>>>>>> {base_branch}", delay=0.015, color=YELLOW)
+    _stream(f"  Delete the markers and keep the version you want.", delay=0.018, color=DIM)
 
 
 @click.command()
@@ -179,9 +282,37 @@ def _run(manual, no_push, no_pr, branch):
                 results["pulled"] = True
 
                 step(f"Merging '{base_branch}' into '{branch_info['current']}'...")
-                merge_branch(repo, base_branch)
-                results["merged"] = True
-                success("Sync complete.")
+                try:
+                    merge_branch(repo, base_branch)
+                    results["merged"] = True
+                    success("Sync complete.")
+                except MergeConflictError as mce:
+                    # ── Guided merge conflict recovery ─────────────────
+                    print()
+                    warning("Merge conflict detected!")
+                    print()
+                    _stream_conflict_guide(mce, base_branch)
+
+                    print()
+                    choice = input(
+                        f"\n{YELLOW}?{RESET} How would you like to handle this?\n"
+                        f"  {GREEN}[m]{RESET} Guide me through fixing it manually\n"
+                        f"  {RED}[x]{RESET} Abort merge and exit safely\n"
+                        f"\n  Your choice: "
+                    ).strip().lower()
+
+                    if choice == "m":
+                        print()
+                        _stream_manual_conflict_resolution(repo, mce)
+                        results["merged"] = True
+                        success("Conflicts resolved and committed.")
+                    else:
+                        step("Aborting merge...")
+                        abort_merge(repo)
+                        success("Merge aborted. Your branch is safely restored.")
+                        info("No changes were lost. Run gitfold again when you're ready.")
+                        print_summary(results)
+                        sys.exit(0)
             except Exception as e:
                 error(str(e))
                 results["errors"].append(str(e))
