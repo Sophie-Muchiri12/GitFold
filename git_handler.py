@@ -320,13 +320,8 @@ def auto_resolve_merge(repo, source_branch):
     try:
         repo.git.merge(source_branch, "--strategy-option=theirs", "--no-edit")
         return True
-    except git.GitCommandError as e:
-        if "conflict" in str(e).lower() or "CONFLICT" in str(e):
-            return False
-        raise Exception(
-            f"Merge failed: {str(e.stderr).strip()}\n"
-            "  Tip: resolve any issues manually and re-run gitfold."
-        )
+    except git.GitCommandError:
+        return False
 
 
 def push_to_remote(repo, branch_name):
