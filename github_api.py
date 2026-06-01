@@ -14,13 +14,45 @@ def get_headers():
     """Return the authorization headers for GitHub API requests."""
     if not GITHUB_TOKEN:
         raise Exception(
-            "GitHub token not found. Please set GITHUB_TOKEN in your .env file."
+            "GitHub token not found.\n"
+            "  Please add your token to the .env file:\n"
+            "    GITHUB_TOKEN=your_token_here\n"
+            "  Get a token at: github.com → Settings → Developer settings\n"
+            "  → Personal access tokens → Tokens (classic)\n"
+            "  Tick 'repo' and 'read:user' scopes when creating it."
         )
     return {
         "Authorization": f"Bearer {GITHUB_TOKEN}",
         "Accept": "application/vnd.github+json",
         "X-GitHub-Api-Version": "2022-11-28",
     }
+
+
+def validate_github_token():
+    """
+    Validate the GitHub token before making API calls.
+    Gives clear instructions if the token is expired or invalid.
+    """
+    try:
+        response = requests.get(f"{GITHUB_API_BASE}/user", headers=get_headers())
+        if response.status_code == 401:
+            raise Exception(
+                "GitHub token is invalid or has expired.\n"
+                "  To fix this:\n"
+                "  1. Go to github.com → Settings → Developer settings\n"
+                "  2. Personal access tokens → Tokens (classic)\n"
+                "  3. Generate a new token with 'repo' and 'read:user' scopes\n"
+                "  4. Replace the GITHUB_TOKEN value in your .env file\n"
+                "  5. Run gitfold again"
+            )
+        elif response.status_code == 403:
+            raise Exception(
+                "GitHub token does not have the required permissions.\n"
+                "  Make sure your token has 'repo' and 'read:user' scopes.\n"
+                "  Go to github.com → Settings → Developer settings to update it."
+            )
+    except Exception as e:
+        raise Exception(str(e))
 
 
 def parse_repo_info(remote_url: str):

@@ -24,11 +24,36 @@ def get_repo():
     """Get the Git repository object from the current directory."""
     try:
         repo = git.Repo(Path.cwd(), search_parent_directories=True)
+
+        # Check for detached HEAD state
+        try:
+            _ = repo.active_branch
+        except TypeError:
+            raise Exception(
+                "You are in a detached HEAD state.\n"
+                "  This means you checked out a specific commit rather than a branch.\n"
+                "  Tip: run 'git checkout -b new-branch-name' to create a branch and continue."
+            )
+
+        # Check for completely empty repo with no commits
+        try:
+            _ = repo.head.commit
+        except ValueError:
+            raise Exception(
+                "This repository has no commits yet.\n"
+                "  Tip: make your first commit manually with:\n"
+                "    git add .\n"
+                "    git commit -m 'initial commit'\n"
+                "  Then run gitfold for all future commits."
+            )
+
         return repo
+
     except git.InvalidGitRepositoryError:
         raise Exception(
             "No Git repository found in the current directory.\n"
-            "  Tip: run 'git init' first to initialise a repo here."
+            "  Tip: run 'git init' to initialise a new repo here,\n"
+            "  or navigate to an existing project folder first."
         )
 
 

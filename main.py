@@ -1,5 +1,7 @@
 import click
 import sys
+import os
+import platform
 from git_handler import (
     get_repo,
     get_changed_files,
@@ -17,6 +19,7 @@ from git_handler import (
 )
 from ai_integration import (
     generate_commit_message,
+    generate_commit_message_regenerate,
     generate_pr_description,
     confirm_message,
 )
@@ -47,7 +50,107 @@ from logger import (
     manual_mode_notice,
     confirm_step,
     prompt_switch_to_manual,
+    _stream,
+    GREEN,
+    YELLOW,
+    RED,
+    BOLD,
+    DIM,
+    RESET,
+    CYAN,
 )
+
+
+def check_python_version():
+    """Ensure Python 3.9+ is being used."""
+    if sys.version_info < (3, 9):
+        print(
+            f"\n  Gitfold requires Python 3.9 or higher.\n"
+            f"  You are running Python {sys.version_info.major}.{sys.version_info.minor}.\n"
+            f"  Please upgrade Python at https://python.org and try again.\n"
+        )
+        sys.exit(1)
+
+
+def check_windows_compatibility():
+    """
+    On Windows, ANSI color codes may not work in older terminals.
+    Enable them if possible, otherwise disable colors gracefully.
+    """
+    if platform.system() == "Windows":
+        try:
+            import ctypes
+            kernel32 = ctypes.windll.kernel32
+            kernel32.SetConsoleMode(kernel32.GetStdHandle(-11), 7)
+        except Exception:
+            pass
+
+
+def check_internet_connection():
+    """Quick check if internet is available before making API calls."""
+    import socket
+    try:
+        socket.setdefaulttimeout(5)
+        socket.socket(socket.AF_INET, socket.SOCK_STREAM).connect(
+            ("8.8.8.8", 53)
+        )
+        return True
+    except Exception:
+        return False
+
+
+def warn_if_main_branch(current_branch: str):
+    """
+    Warn the user if they are pushing directly from main or master.
+    Ask for confirmation before proceeding.
+    """
+    if current_branch in ["main", "master"]:
+        print()
+        _stream(
+            f"  ⚠️  You are on the '{current_branch}' branch!",
+            delay=0.02, color=f"{YELLOW}{BOLD}"
+        )
+        _stream(
+            "  Pushing directly to main/master is risky in a team environment.",
+            delay=0.018, color=DIM
+        )
+        _stream(
+            "  It's best practice to work on a feature branch instead.",
+            delay=0.018, color=DIM
+        )
+        print()
+        answer = input(
+            f"  {YELLOW}?{RESET} Are you sure you want to continue on '{current_branch}'? [y/n]: "
+        ).strip().lower()
+        if answer != "y":
+            _stream(
+                "\n  Tip: create a new branch with 'git checkout -b your-feature-branch'",
+                delay=0.018, color=DIM
+            )
+            _stream(
+                "  Then run gitfold again from that branch.",
+                delay=0.018, color=DIM
+            )
+            sys.exit(0)
+
+
+def warn_if_large_diff(diff: str):
+    """Warn the user if the diff is very large and the commit message may be generic."""
+    if len(diff) > 8000:
+        print()
+        _stream(
+            "  ⚠️  Large diff detected — many files changed at once.",
+            delay=0.018, color=YELLOW
+        )
+        _stream(
+            "  The AI commit message may be less specific than usual.",
+            delay=0.018, color=DIM
+        )
+        _stream(
+            "  Tip: consider committing in smaller batches for better messages.",
+            delay=0.018, color=DIM
+        )
+        print()
 
 
 def _stream_manual_conflict_resolution(repo, mce: MergeConflictError):
@@ -178,6 +281,11 @@ def done(manual, no_push, no_pr, branch):
 
 
 def _run(manual, no_push, no_pr, branch):
+
+    # ── Pre-flight checks ──────────────────────────────────────────
+    check_python_version()
+    check_windows_compatibility()
+
     results = {
         "staged": False,
         "committed": False,
@@ -209,6 +317,10 @@ def _run(manual, no_push, no_pr, branch):
         success(f"Dev branch detected: {branch_info['dev']}")
     if branch_info["default"]:
         success(f"Default branch: {branch_info['default']}")
+
+    # Warn if pushing directly to main/master
+    if not no_push:
+        warn_if_main_branch(branch_info["current"])
 
     # ── Step 3: Load or create config ──────────────────────────────
     section("Config")
@@ -244,15 +356,29 @@ def _run(manual, no_push, no_pr, branch):
     section("Commit Message")
     try:
         diff = get_diff(repo)
-        commit_message = None
 
-        while not commit_message:
-            commit_message = generate_commit_message(diff)
-            commit_message = confirm_message(commit_message, "commit message")
-            # None means user wants to regenerate
+        # Warn if diff is very large
+        warn_if_large_diff(diff)
+
+        # Check internet before calling AI
+        if not check_internet_connection():
+            warning("No internet connection detected.")
+            info("Gitfold needs internet to generate AI commit messages.")
+            commit_message = input(
+                f"\n  {YELLOW}?{RESET} Enter your commit message manually: "
+            ).strip()
+        else:
+            commit_message = None
+            while not commit_message:
+                generated = generate_commit_message(diff)
+                commit_message = confirm_message(generated, "commit message")
+                if commit_message is None:
+                    generated = generate_commit_message_regenerate(diff)
+                    commit_message = confirm_message(generated, "commit message")
+
     except Exception as e:
         error(f"AI commit message generation failed: {e}")
-        commit_message = input("Enter commit message manually: ").strip()
+        commit_message = input("  Enter commit message manually: ").strip()
 
     # ── Step 7: Commit ─────────────────────────────────────────────
     section("Committing")
@@ -325,6 +451,10 @@ def _run(manual, no_push, no_pr, branch):
         section("Pushing")
         if not has_remote(repo):
             warning("No remote origin found. Skipping push.")
+            info("Tip: add a remote with 'git remote add origin <url>'")
+        elif not check_internet_connection():
+            warning("No internet connection. Skipping push and PR.")
+            info("Your commit is saved locally. Run gitfold again when you're back online.")
         else:
             if manual and not confirm_step(f"Push '{branch_info['current']}' to remote?"):
                 warning("Push skipped.")
