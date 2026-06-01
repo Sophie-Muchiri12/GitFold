@@ -1,4 +1,4 @@
-from setuptools import setup, find_packages
+from setuptools import setup
 
 with open("README.md", "r", encoding="utf-8") as f:
     long_description = f.read()
@@ -6,13 +6,20 @@ with open("README.md", "r", encoding="utf-8") as f:
 setup(
     name="gitfold",
     version="0.1.0",
-    author="Your Name",
-    author_email="your@email.com",
+    author="Sophie Muchiri",
+    author_email="muthonisophie12@gmail.com",
     description="One command to stage, commit, merge, push, and open a PR — powered by AI.",
     long_description=long_description,
     long_description_content_type="text/markdown",
-    url="https://github.com/yourusername/gitfold",
-    py_modules=["main", "git_handler", "ai_integration", "config_manager", "github_api", "logger"],
+    url="https://github.com/Sophie-Muchiri12/GitFold",
+    py_modules=[
+        "main",
+        "git_handler",
+        "ai_integration",
+        "config_manager",
+        "github_api",
+        "logger",
+    ],
     python_requires=">=3.9",
     install_requires=[
         "gitpython",
@@ -20,7 +27,6 @@ setup(
         "requests",
         "python-dotenv",
         "click",
-        "rich",
     ],
     entry_points={
         "console_scripts": [
