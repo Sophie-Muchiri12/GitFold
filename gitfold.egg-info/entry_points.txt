@@ -1,3 +1,0 @@
-[console_scripts]
-gf = main:done
-gitfold = main:done
