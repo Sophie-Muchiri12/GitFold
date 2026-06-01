@@ -1,6 +1,0 @@
-gitpython
-openai
-requests
-python-dotenv
-click
-rich
