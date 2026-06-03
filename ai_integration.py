@@ -1,143 +1,184 @@
 import os
 import time
-import openai
+import requests
 from dotenv import load_dotenv
 
 load_dotenv()
 
-# ── API Configuration ──────────────────────────────────────────────
-# Gitfold supports Featherless, Groq, and OpenAI.
-# Priority: Featherless → Groq → OpenAI
-# Set the relevant key in your .env file.
+# ── Proxy Configuration ────────────────────────────────────────────
+# gitfold calls your hosted proxy server so no API key is ever bundled
+# in the package or stored on the user's machine.
+#
+# The default URL points to your production proxy.
+# Users can override it with GITFOLD_PROXY_URL in their .env if they
+# want to self-host, or if they prefer to use their own key directly
+# (see "Bring-your-own-key" fallback below).
+#
+# After deploying the proxy server, replace the default URL here and
+# republish to PyPI:
+PROXY_BASE_URL = os.getenv(
+    "GITFOLD_PROXY_URL",
+    "https://gitfold-proxy.onrender.com",  # ← replace with your deployed URL
+).rstrip("/")
 
-FEATHERLESS_API_KEY = os.getenv("FEATHERLESS_API_KEY")
-GROQ_API_KEY = os.getenv("GROQ_API_KEY")
-OPENAI_API_KEY = os.getenv("OPENAI_API_KEY")
+# ── Bring-your-own-key fallback (optional for power users) ────────
+# If the user supplies their own key, gitfold calls the AI provider
+# directly — useful for teams with higher rate-limit needs.
+import openai as _openai
 
-if FEATHERLESS_API_KEY:
-    client = openai.OpenAI(
-        api_key=FEATHERLESS_API_KEY,
-        base_url="https://api.featherless.ai/v1",
+_FEATHERLESS_API_KEY = os.getenv("FEATHERLESS_API_KEY")
+_GROQ_API_KEY = os.getenv("GROQ_API_KEY")
+_OPENAI_API_KEY = os.getenv("OPENAI_API_KEY")
+
+_client = None
+_MODEL = None
+_PROVIDER = None
+
+def _use_proxy() -> bool:
+    """True when no personal key is configured → route through the proxy."""
+    return not (_FEATHERLESS_API_KEY or _GROQ_API_KEY or _OPENAI_API_KEY)
+
+
+def _init_byo_client():
+    """Lazily initialise a direct AI client when the user supplies their own key."""
+    global _client, _MODEL, _PROVIDER
+    if _client is not None:
+        return
+    if _FEATHERLESS_API_KEY:
+        _client = _openai.OpenAI(
+            api_key=_FEATHERLESS_API_KEY,
+            base_url="https://api.featherless.ai/v1",
+        )
+        _MODEL = "meta-llama/Llama-3.3-70B-Instruct"
+        _PROVIDER = "Featherless (your key)"
+    elif _GROQ_API_KEY:
+        _client = _openai.OpenAI(
+            api_key=_GROQ_API_KEY,
+            base_url="https://api.groq.com/openai/v1",
+        )
+        _MODEL = "llama-3.1-8b-instant"
+        _PROVIDER = "Groq (your key)"
+    elif _OPENAI_API_KEY:
+        _client = _openai.OpenAI(api_key=_OPENAI_API_KEY)
+        _MODEL = "gpt-4o"
+        _PROVIDER = "OpenAI (your key)"
+
+
+# ── Proxy helpers ─────────────────────────────────────────────────
+def _proxy_post(endpoint: str, payload: dict) -> dict:
+    """POST to the proxy and return parsed JSON. Raises on network/server error."""
+    url = f"{PROXY_BASE_URL}{endpoint}"
+    try:
+        resp = requests.post(url, json=payload, timeout=30)
+        resp.raise_for_status()
+        return resp.json()
+    except requests.exceptions.ConnectionError:
+        raise Exception(
+            f"\n  Could not reach the gitfold AI server ({PROXY_BASE_URL}).\n"
+            "  Check your internet connection and try again.\n"
+            "  Or add your own API key to .env to use it directly:\n"
+            "    FEATHERLESS_API_KEY=your_key_here\n"
+        )
+    except requests.exceptions.Timeout:
+        raise Exception(
+            "\n  The gitfold AI server timed out.\n"
+            "  It may be starting up (cold start) — wait a few seconds and retry.\n"
+        )
+    except requests.exceptions.HTTPError as e:
+        detail = ""
+        try:
+            detail = resp.json().get("detail", "")
+        except Exception:
+            pass
+        raise Exception(f"\n  AI server returned an error: {e}\n  {detail}\n")
+
+
+def _stream_text(text: str):
+    """Print text token by token to simulate streaming for UX consistency."""
+    for char in text:
+        print(char, end="", flush=True)
+        time.sleep(0.012)
+    print("\n")
+
+
+# ── BYO-key direct call helpers ────────────────────────────────────
+def _byo_stream(prompt: str, temperature: float, max_tokens: int = 300) -> str:
+    _init_byo_client()
+    full_message = ""
+    stream = _client.chat.completions.create(
+        model=_MODEL,
+        messages=[{"role": "user", "content": prompt}],
+        stream=True,
+        max_tokens=max_tokens,
+        temperature=temperature,
     )
-    MODEL = "meta-llama/Llama-3.3-70B-Instruct"
-    PROVIDER = "Featherless"
-
-elif GROQ_API_KEY:
-    client = openai.OpenAI(
-        api_key=GROQ_API_KEY,
-        base_url="https://api.groq.com/openai/v1",
-    )
-    MODEL = "llama-3.3-70b-versatile"
-    PROVIDER = "Groq"
-
-elif OPENAI_API_KEY:
-    client = openai.OpenAI(api_key=OPENAI_API_KEY)
-    MODEL = "gpt-4o"
-    PROVIDER = "OpenAI"
-
-else:
-    raise Exception(
-        "\n  No AI API key found in your .env file.\n"
-        "  Please add one of the following:\n"
-        "    FEATHERLESS_API_KEY=your_key_here  (recommended — featherless.ai)\n"
-        "    GROQ_API_KEY=your_key_here         (free — console.groq.com)\n"
-        "    OPENAI_API_KEY=your_key_here       (platform.openai.com)\n"
-    )
+    for chunk in stream:
+        token = chunk.choices[0].delta.content or ""
+        print(token, end="", flush=True)
+        time.sleep(0.03)
+        full_message += token
+    print("\n")
+    return full_message.strip()
 
 
+# ── Public API ────────────────────────────────────────────────────
 def generate_commit_message(diff: str) -> str:
-    """
-    Send the git diff to the AI and stream back a meaningful commit message.
-    """
+    """Send the git diff and stream back a meaningful commit message."""
     if not diff or diff.strip() == "":
         return "chore: minor updates"
 
-    prompt = f"""You are an expert software engineer writing Git commit messages.
-Based on the following git diff, write a clear, concise commit message.
-
-Rules:
-- Use conventional commit format: type(scope): short description
-- Types: feat, fix, chore, refactor, docs, style, test
-- Keep the first line under 72 characters
-- Add a short bullet-point body if there are multiple changes
-- Do NOT include any explanation or preamble — just the commit message
-
-Git diff:
-{diff[:4000]}
-"""
-
-    print(f"\n🤖 Generating commit message via {PROVIDER}...\n")
-
-    full_message = ""
-
-    try:
-        stream = client.chat.completions.create(
-            model=MODEL,
-            messages=[{"role": "user", "content": prompt}],
-            stream=True,
-            max_tokens=300,
-            temperature=0.4,
+    if _use_proxy():
+        print("\n🤖 Generating commit message...\n")
+        data = _proxy_post("/generate/commit", {"diff": diff})
+        _stream_text(data["message"])
+        return data["message"]
+    else:
+        prompt = (
+            "You are an expert software engineer writing Git commit messages.\n"
+            "Based on the following git diff, write a clear, concise commit message.\n\n"
+            "Rules:\n"
+            "- Use conventional commit format: type(scope): short description\n"
+            "- Types: feat, fix, chore, refactor, docs, style, test\n"
+            "- Keep the first line under 72 characters\n"
+            "- Add a short bullet-point body if there are multiple changes\n"
+            "- Do NOT include any explanation or preamble — just the commit message\n\n"
+            f"Git diff:\n{diff[:4000]}\n"
         )
-
-        for chunk in stream:
-            token = chunk.choices[0].delta.content or ""
-            print(token, end="", flush=True)
-            time.sleep(0.03)
-            full_message += token
-
-        print("\n")
-        return full_message.strip()
-
-    except Exception as e:
-        raise Exception(f"AI commit message generation failed: {e}")
+        print(f"\n🤖 Generating commit message via {_PROVIDER}...\n")
+        try:
+            return _byo_stream(prompt, temperature=0.4)
+        except Exception as e:
+            raise Exception(f"AI commit message generation failed: {e}")
 
 
 def generate_commit_message_regenerate(diff: str) -> str:
-    """
-    Regenerate a commit message with higher temperature for more variety.
-    """
+    """Regenerate a commit message with higher temperature for more variety."""
     if not diff or diff.strip() == "":
         return "chore: minor updates"
 
-    prompt = f"""You are an expert software engineer writing Git commit messages.
-Based on the following git diff, write a clear, concise commit message.
-
-Rules:
-- Use conventional commit format: type(scope): short description
-- Types: feat, fix, chore, refactor, docs, style, test
-- Keep the first line under 72 characters
-- Add a short bullet-point body if there are multiple changes
-- Do NOT include any explanation or preamble — just the commit message
-- Write a DIFFERENT variation from what you might have written before
-
-Git diff:
-{diff[:4000]}
-"""
-
-    print(f"\n🤖 Regenerating commit message via {PROVIDER}...\n")
-
-    full_message = ""
-
-    try:
-        stream = client.chat.completions.create(
-            model=MODEL,
-            messages=[{"role": "user", "content": prompt}],
-            stream=True,
-            max_tokens=300,
-            temperature=0.7,
+    if _use_proxy():
+        print("\n🤖 Regenerating commit message...\n")
+        data = _proxy_post("/generate/commit/regen", {"diff": diff})
+        _stream_text(data["message"])
+        return data["message"]
+    else:
+        prompt = (
+            "You are an expert software engineer writing Git commit messages.\n"
+            "Based on the following git diff, write a clear, concise commit message.\n\n"
+            "Rules:\n"
+            "- Use conventional commit format: type(scope): short description\n"
+            "- Types: feat, fix, chore, refactor, docs, style, test\n"
+            "- Keep the first line under 72 characters\n"
+            "- Add a short bullet-point body if there are multiple changes\n"
+            "- Do NOT include any explanation or preamble — just the commit message\n"
+            "- Write a DIFFERENT variation from what you might have written before\n\n"
+            f"Git diff:\n{diff[:4000]}\n"
         )
-
-        for chunk in stream:
-            token = chunk.choices[0].delta.content or ""
-            print(token, end="", flush=True)
-            time.sleep(0.03)
-            full_message += token
-
-        print("\n")
-        return full_message.strip()
-
-    except Exception as e:
-        raise Exception(f"AI commit message regeneration failed: {e}")
+        print(f"\n🤖 Regenerating commit message via {_PROVIDER}...\n")
+        try:
+            return _byo_stream(prompt, temperature=0.7)
+        except Exception as e:
+            raise Exception(f"AI commit message regeneration failed: {e}")
 
 
 def generate_pr_description(diff: str, commit_message: str, branch_name: str):
@@ -148,55 +189,44 @@ def generate_pr_description(diff: str, commit_message: str, branch_name: str):
     if not diff or diff.strip() == "":
         return "Minor updates", "No significant changes detected."
 
-    prompt = f"""You are an expert software engineer writing a GitHub Pull Request description.
-
-Branch: {branch_name}
-Commit message: {commit_message}
-
-Based on the git diff below, write a clear PR description with:
-1. A short PR title (first line) — plain text only, no markdown, no asterisks, no bold
-2. A blank line
-3. A ## Summary section explaining what was changed and why
-4. A ## Changes section with bullet points of key changes
-
-Keep it professional and developer-friendly. No preamble — just the PR content.
-
-Git diff:
-{diff[:4000]}
-"""
-
-    print(f"\n🤖 Generating PR description via {PROVIDER}...\n")
-
-    full_response = ""
-
-    try:
-        stream = client.chat.completions.create(
-            model=MODEL,
-            messages=[{"role": "user", "content": prompt}],
-            stream=True,
-            max_tokens=500,
-            temperature=0.4,
+    if _use_proxy():
+        print("\n🤖 Generating PR description...\n")
+        data = _proxy_post("/generate/pr", {
+            "diff": diff,
+            "commit_message": commit_message,
+            "branch_name": branch_name,
+        })
+        full_response = f"{data['title']}\n\n{data['body']}"
+        _stream_text(full_response)
+        return data["title"], data["body"]
+    else:
+        prompt = (
+            "You are an expert software engineer writing a GitHub Pull Request description.\n\n"
+            f"Branch: {branch_name}\n"
+            f"Commit message: {commit_message}\n\n"
+            "Based on the git diff below, write a clear PR description with:\n"
+            "1. A short PR title (first line) — plain text only, no markdown, no asterisks, no bold\n"
+            "2. A blank line\n"
+            "3. A ## Summary section explaining what was changed and why\n"
+            "4. A ## Changes section with bullet points of key changes\n\n"
+            "Keep it professional and developer-friendly. No preamble — just the PR content.\n\n"
+            f"Git diff:\n{diff[:4000]}\n"
         )
-
-        for chunk in stream:
-            token = chunk.choices[0].delta.content or ""
-            print(token, end="", flush=True)
-            time.sleep(0.03)
-            full_response += token
-
-        print("\n")
+        print(f"\n🤖 Generating PR description via {_PROVIDER}...\n")
+        try:
+            full_response = _byo_stream(prompt, temperature=0.4, max_tokens=500)
+        except Exception as e:
+            raise Exception(f"PR description generation failed: {e}")
 
         lines = full_response.strip().split("\n")
         pr_title = lines[0].strip() if lines else commit_message
         pr_body = "\n".join(lines[1:]).strip() if len(lines) > 1 else ""
 
-        # Strip any markdown formatting from title
-        pr_title = pr_title.replace("**", "").replace("__", "").replace("*", "").replace("`", "").strip()
+        for ch in ["**", "__", "*", "`"]:
+            pr_title = pr_title.replace(ch, "")
+        pr_title = pr_title.strip()
 
         return pr_title, pr_body
-
-    except Exception as e:
-        raise Exception(f"PR description generation failed: {e}")
 
 
 def confirm_message(message: str, label: str = "commit message") -> str:

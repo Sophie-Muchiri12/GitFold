@@ -7,4 +7,9 @@ requests #for GitHub API calls
 python-dotenv #for managing your API keys securely in the .env file
 
 click
-rich
+
+fastapi>=0.110.0
+uvicorn[standard]>=0.29.0
+openai>=1.0.0
+slowapi>=0.1.9
+pydantic>=2.0.0
