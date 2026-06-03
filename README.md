@@ -144,7 +144,117 @@ gitfold/
 ├── setup.py
 └── README.md
 ```
+# gitfold-proxy
 
+The AI backend for [gitfold](https://github.com/Sophie-Muchiri12/GitFold).
+
+This is a tiny FastAPI server that holds your Featherless API key server-side.
+Users who install `gitfold` via `pip install gitfold` never need to configure
+an API key — they just call this proxy.
+
+---
+
+## Architecture
+
+```
+User's terminal
+  └── gitfold CLI (PyPI)
+        └── POST https://your-proxy.onrender.com/generate/commit
+              └── Featherless API  (key lives only on your server)
+```
+
+---
+
+## Deploy in 5 minutes (Render — free tier)
+
+1. Push this folder to a new GitHub repo (e.g. `gitfold-proxy`)
+2. Go to [render.com](https://render.com) → **New Web Service**
+3. Connect your GitHub repo
+4. Render auto-detects the `render.yaml` — click **Deploy**
+5. In the Render dashboard → **Environment** tab, add:
+   ```
+   FEATHERLESS_API_KEY = your_actual_key_here
+   ```
+6. Copy your service URL, e.g. `https://gitfold-proxy.onrender.com`
+
+> **Note:** Render's free tier spins down after 15 min of inactivity.
+> The first request after sleep takes ~5 seconds (cold start). Upgrade
+> to a paid instance ($7/mo) to keep it always-on.
+
+---
+
+## Deploy on Railway (always-on free tier)
+
+1. Push to GitHub
+2. Go to [railway.app](https://railway.app) → **New Project → Deploy from GitHub**
+3. Select your repo
+4. Add env var: `FEATHERLESS_API_KEY = your_key`
+5. Railway uses the `railway.toml` config automatically
+
+---
+
+## After deploying
+
+Update the default proxy URL in the gitfold package's `ai_integration.py`:
+
+```python
+PROXY_BASE_URL = os.getenv(
+    "GITFOLD_PROXY_URL",
+    "https://YOUR-SERVICE.onrender.com",  # ← your real URL here
+)
+```
+
+Then bump the version in `setup.py` and republish to PyPI:
+
+```bash
+python -m build
+twine upload dist/*
+```
+
+---
+
+## Endpoints
+
+| Method | Path                    | Description                        |
+|--------|-------------------------|------------------------------------|
+| GET    | `/health`               | Liveness check                     |
+| POST   | `/generate/commit`      | Generate a commit message          |
+| POST   | `/generate/commit/regen`| Regenerate with higher temperature |
+| POST   | `/generate/pr`          | Generate PR title + body           |
+
+### POST /generate/commit
+
+```json
+Request:  { "diff": "<git diff string>" }
+Response: { "message": "feat(auth): add JWT refresh token support", "provider": "Featherless" }
+```
+
+### POST /generate/pr
+
+```json
+Request:  { "diff": "...", "commit_message": "...", "branch_name": "feature/auth" }
+Response: { "title": "Add JWT refresh tokens", "body": "## Summary\n...", "provider": "Featherless" }
+```
+
+---
+
+## Rate limiting
+
+30 requests/minute per IP address. This is generous for a CLI tool.
+Adjust `@limiter.limit("30/minute")` in `server.py` if needed.
+
+---
+
+## Bring-your-own-key
+
+Power users who want higher limits can add their own key to their project's `.env`:
+
+```
+FEATHERLESS_API_KEY=their_own_key
+```
+
+The gitfold package detects this and calls Featherless directly, bypassing
+the proxy entirely.
 ---
 
 ## Contributing
