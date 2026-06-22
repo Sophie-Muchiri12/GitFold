@@ -2,9 +2,9 @@ import os
 import re
 import webbrowser
 import requests
-from dotenv import load_dotenv
+from config_manager import load_env
 
-load_dotenv()
+load_env()
 
 GITHUB_TOKEN = os.getenv("GITHUB_TOKEN")
 GITHUB_API_BASE = "https://api.github.com"

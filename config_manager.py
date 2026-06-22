@@ -36,8 +36,20 @@ def get_config_path():
 
 
 def get_env_path():
-    """Return the .env path in the current working directory."""
-    return Path.cwd() / ENV_FILE_NAME
+    """Find .env starting from current directory up to the filesystem root."""
+    current = Path.cwd()
+    for parent in [current, *current.parents]:
+        env_path = parent / ENV_FILE_NAME
+        if env_path.exists():
+            return env_path
+    return current / ENV_FILE_NAME
+
+
+def load_env() -> None:
+    """Load .env from the project tree (works when installed via pipx)."""
+    from dotenv import load_dotenv
+
+    load_dotenv(get_env_path())
 
 
 def load_config() -> dict:
