@@ -9,27 +9,27 @@ load_dotenv()
 
 app = FastAPI(title="Gitfold AI Backend", version="1.0.0")
 
-# ── Featherless Client ─────────────────────────────────────────────
+# ── AI Client (Groq by default) ────────────────────────────────────
 FEATHERLESS_API_KEY = os.getenv("FEATHERLESS_API_KEY")
 GROQ_API_KEY = os.getenv("GROQ_API_KEY")
 
-if FEATHERLESS_API_KEY:
-    client = openai.OpenAI(
-        api_key=FEATHERLESS_API_KEY,
-        base_url="https://api.featherless.ai/v1",
-    )
-    MODEL = "meta-llama/Llama-3.3-70B-Instruct"
-    PROVIDER = "Featherless"
-elif GROQ_API_KEY:
+if GROQ_API_KEY:
     client = openai.OpenAI(
         api_key=GROQ_API_KEY,
         base_url="https://api.groq.com/openai/v1",
     )
     MODEL = "llama-3.3-70b-versatile"
     PROVIDER = "Groq"
+elif FEATHERLESS_API_KEY:
+    client = openai.OpenAI(
+        api_key=FEATHERLESS_API_KEY,
+        base_url="https://api.featherless.ai/v1",
+    )
+    MODEL = "meta-llama/Llama-3.3-70B-Instruct"
+    PROVIDER = "Featherless"
 else:
     raise RuntimeError(
-        "No AI API key found. Set FEATHERLESS_API_KEY or GROQ_API_KEY in your environment."
+        "No AI API key found. Set GROQ_API_KEY or FEATHERLESS_API_KEY in your environment."
     )
 
 
@@ -47,6 +47,7 @@ class PRRequest(BaseModel):
 
 # ── Health Check ───────────────────────────────────────────────────
 @app.get("/")
+@app.get("/health")
 def health_check():
     return {
         "status": "ok",
@@ -137,4 +138,4 @@ Git diff:
             token = chunk.choices[0].delta.content or ""
             yield token
 
-    return StreamingResponse(stream_response(), media_type="text/plain")
+    return StreamingResponse(stream_response(), media_type="text/plain") 
